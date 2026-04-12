@@ -1,6 +1,5 @@
 find_package(GTest     CONFIG REQUIRED)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(PLPLOT REQUIRED IMPORTED_TARGET plplot)
+find_package(plplot    CONFIG REQUIRED)
 
 add_executable(falcon-qarray-device_tests
   test_device.cpp
@@ -17,7 +16,7 @@ target_link_libraries(falcon-qarray-device_tests
     falcon-qarray-device
     GTest::gtest
     pybind11::embed
-    PkgConfig::PLPLOT
+    PLPLOT::plplot
 )
 
 include(GoogleTest)

@@ -20,6 +20,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build cmake build-essential mono-complete
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Install uv for Python environment management
         run: |
           curl -Ls https://astral.sh/uv/install.sh | sh
