@@ -1,4 +1,4 @@
-#include "qarrayDevice/Device.hpp"
+#include "falcon-qarray-device/Device.hpp"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
