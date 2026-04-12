@@ -1,0 +1,6 @@
+.nuget-credentials
+build/
+vcpkg/
+vcpkg_installed/
+compile_commands.json
+
