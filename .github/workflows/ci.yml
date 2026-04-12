@@ -18,7 +18,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build cmake build-essential mono-complete plplot-data
+          sudo apt-get install -y ninja-build cmake build-essential mono-complete
 
       - uses: actions/setup-python@v5
         with:
@@ -26,6 +26,8 @@ jobs:
       - name: Install uv for Python environment management
         run: |
           curl -Ls https://astral.sh/uv/install.sh | sh
+      - name: Set PLPLOT_LIB for PLplot data files
+        run: echo "PLPLOT_LIB=$PWD/vcpkg_installed/x64-linux-dynamic/share/plplot" >> $GITHUB_ENV
 
       - name: Run tests
         env:
