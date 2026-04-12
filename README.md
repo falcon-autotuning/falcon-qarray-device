@@ -1,4 +1,4 @@
-# falcon-qarrayDevice
+# falcon-qarray-device
 
 A C++ shared library that embeds the CPython interpreter and wraps the
 `quantum_dot_device.py` `Device` class, exposing it natively to C++ consumers.
@@ -9,7 +9,7 @@ A C++ shared library that embeds the CPython interpreter and wraps the
 C++ caller
     │
     ▼
-falcon::qarray::Device          (C++ class in libfalcon-qarrayDevice.so)
+falcon::qarray::Device          (C++ class in libfalcon-qarray-device.so)
     │  uses pybind11::embed
     ▼
 CPython interpreter              (started once per process)
@@ -127,6 +127,6 @@ int main() {
 ## Linking in your CMake project
 
 ```cmake
-find_package(falcon-qarrayDevice CONFIG REQUIRED)
-target_link_libraries(my_target PRIVATE falcon::falcon-qarrayDevice)
+find_package(falcon-qarray-device CONFIG REQUIRED)
+target_link_libraries(my_target PRIVATE falcon::falcon-qarray-device)
 ```
