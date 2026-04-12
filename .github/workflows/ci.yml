@@ -18,7 +18,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build cmake build-essential mono-complete
+          sudo apt-get install -y ninja-build cmake build-essential mono-complete plplot12-driver-cairo plplot-data
 
       - uses: actions/setup-python@v5
         with:
