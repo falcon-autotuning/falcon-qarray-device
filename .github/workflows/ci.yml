@@ -27,7 +27,7 @@ jobs:
         run: |
           curl -Ls https://astral.sh/uv/install.sh | sh
       - name: Set PLPLOT_LIB for PLplot data files
-        run: echo "PLPLOT_LIB=$PWD/vcpkg_installed/x64-linux-dynamic/share/plplot" >> $GITHUB_ENV
+        run: echo "PLPLOT_LIB=$PWD/vcpkg_installed/x64-linux-dynamic/share/plplot/data" >> $GITHUB_ENV
 
       - name: Run tests
         env:
