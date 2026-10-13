@@ -3,6 +3,7 @@
 VENV_DIR ?= $(CURDIR)/venv
 PRESET ?= linux-clang-release
 CMAKE_BUILD_DIR := build/$(PRESET)
+INSTALL_PREFIX ?= /opt/falcon
 
 help:
 	@echo "Falcon Qarray device Build System"
@@ -15,7 +16,7 @@ help:
 	@echo "  make configure PRESET=<preset>  - Configure build (default: $(PRESET))"
 	@echo "  make build PRESET=<preset>      - Build (default: $(PRESET))"
 	@echo "  make test PRESET=<preset>       - Run tests (default: $(PRESET))"
-	@echo "  make install PRESET=<preset>    - Install to /opt/falcon"
+	@echo "  make install PRESET=<preset>    - Install to $(INSTALL_PREFIX)"
 	@echo "  make clean                      - Clean all build artifacts"
 	@echo ""
 	@echo "Examples:"
@@ -49,8 +50,8 @@ test: build
 	ctest --preset $(PRESET) --output-on-failure
 
 install: build
-	@echo "Installing $(PRESET) to /opt/falcon..."
-	cmake --install $(CMAKE_BUILD_DIR) --prefix /opt/falcon
+	@echo "Installing $(PRESET) to $(INSTALL_PREFIX)..."
+	cmake --install $(CMAKE_BUILD_DIR) --prefix $(INSTALL_PREFIX)
 
 clean:
 	@echo "Cleaning all build artifacts..."

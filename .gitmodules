@@ -1,3 +1,6 @@
 [submodule "cmake/bootstrap"]
 	path = cmake/bootstrap
 	url = https://github.com/falcon-autotuning/cmake-vcpkg-bootstrap.git
+[submodule "my-vcpkg-triplets"]
+	path = my-vcpkg-triplets
+	url = https://github.com/Neumann-A/my-vcpkg-triplets.git

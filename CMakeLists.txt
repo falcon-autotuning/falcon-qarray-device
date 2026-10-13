@@ -94,6 +94,10 @@ endif()
 message(STATUS "Python3 site-packages: ${PYTHON_SITE_PACKAGES}")
 
 # ── Install path for the device.py module ────────────────────────
+# GNUInstallDirs must be included BEFORE this: CMAKE_INSTALL_DATADIR is only
+# defined by that module, and using it beforehand silently yields an absolute
+# "/falcon-qarray-device" instead of "share/falcon-qarray-device".
+include(GNUInstallDirs)
 set(PYTHON_MODULE_INSTALL_DIR "${CMAKE_INSTALL_DATADIR}/falcon-qarray-device")
 
 # ── Generate headers ──────────────────────────────────────────────────────────
@@ -168,6 +172,15 @@ install(DIRECTORY include/falcon-qarray-device
   FILES_MATCHING
     PATTERN "*.hpp"
     PATTERN "*.h"
+)
+
+# Device.cpp resolves the Python module through FALCON_QARRAY_PYTHON_MODULE_DIR,
+# which PythonModulePath.hpp.in bakes to PYTHON_MODULE_INSTALL_DIR. Without this
+# rule that directory is never populated, so an installed build cannot import its
+# own module. Consumers still override with an absolute FALCON_QARRAY_PYTHON_PATH
+# at runtime, since the baked path is relative to the install prefix.
+install(FILES src/device.py
+  DESTINATION ${PYTHON_MODULE_INSTALL_DIR}
 )
 
 write_basic_package_version_file(
