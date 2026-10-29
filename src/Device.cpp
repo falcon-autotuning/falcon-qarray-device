@@ -61,6 +61,9 @@ private:
     if (!module_dir.empty()) {
       sys_path.attr("insert")(0, module_dir);
     }
+#ifdef FALCON_QARRAY_PYTHON_DEV_DIR
+    sys_path.attr("insert")(0, FALCON_QARRAY_PYTHON_DEV_DIR);
+#endif
   }
 };
 
@@ -134,6 +137,9 @@ struct Device::Impl {
       if (!module_dir.empty()) {
         sys_path.attr("insert")(0, module_dir);
       }
+#ifdef FALCON_QARRAY_PYTHON_DEV_DIR
+      sys_path.attr("insert")(0, FALCON_QARRAY_PYTHON_DEV_DIR);
+#endif
 
       path_configured = true;
     }

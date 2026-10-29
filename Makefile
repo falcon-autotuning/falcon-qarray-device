@@ -7,7 +7,7 @@ INSTALL_PREFIX ?= /opt/falcon
 
 help:
 	@echo "Falcon Qarray device Build System"
-	@echo "========================"
+	@echo "================================="
 	@echo ""
 	@echo "Available presets:"
 	@cmake --list-presets=all
@@ -26,11 +26,15 @@ help:
 	@echo "  make install PRESET=linux-gcc-release           # Install gcc build"
 
 venv-setup:
-	echo "Creating $(VENV_DIR) with Python 3.12 via uv..."; \
-	uv venv --python 3.12 --clear $(VENV_DIR); \
-	echo "Installing Python dependencies into $(VENV_DIR)..."; \
-	uv pip install --python $(VENV_DIR)/bin/python -r requirements.txt; \
-	echo "✓ Python dependencies installed"; \
+	@if [ ! -f "$(VENV_DIR)/bin/python" ]; then \
+		echo "Creating $(VENV_DIR) with Python 3.12 via uv..."; \
+		uv venv --python 3.12 --clear $(VENV_DIR); \
+		echo "Installing Python dependencies into $(VENV_DIR)..."; \
+		uv pip install --python $(VENV_DIR)/bin/python --no-cache -r requirements.txt; \
+		echo "✓ Python dependencies installed"; \
+	else \
+		echo "✓ Python venv already exists at $(VENV_DIR)"; \
+	fi
 
 vcpkg-bootstrap: venv-setup
 	@echo "Bootstrapping vcpkg..."
@@ -47,6 +51,7 @@ build: configure
 test: build
 	@echo "Running tests for $(PRESET)..."
 	PLPLOT_LIB=$(CURDIR)/vcpkg_installed/x64-linux-dynamic/share/plplot/data \
+	LD_LIBRARY_PATH=$(CURDIR)/vcpkg_installed/x64-linux-dynamic/lib:$$LD_LIBRARY_PATH \
 	ctest --preset $(PRESET) --output-on-failure
 
 install: build

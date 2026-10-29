@@ -1,0 +1,17 @@
+{
+  "name": "isa-test-utils",
+  "version": "1.2.8",
+  "description": "A set of utilities to help with writing tests for instruments and plugins for the instrument-script-server",
+  "homepage": "https://github.com/falcon-autotuning/isa-test-utils",
+  "dependencies": [
+    "vcpkg-cmake",
+    "vcpkg-cmake-config",
+    "uthash",
+    "cjson",
+    {
+      "name": "instrument-data",
+      "version>=": "1.1.0"
+    }
+  ],
+  "builtin-baseline": "e5a1490e1409d175932ef6014519e9ae149ddb7c"
+}

@@ -16,6 +16,7 @@
         "VCPKG_ROOT": "${sourceDir}/vcpkg",
         "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/my-vcpkg-triplets",
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports",
         "CMAKE_MAKE_PROGRAM": "ninja",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "Python3_EXECUTABLE": "${sourceDir}/venv/bin/python",
@@ -24,6 +25,7 @@
         "USE_CCACHE": "ON",
         "ENABLE_PCH": "ON",
         "BUILD_TESTS": "ON",
+        "BUILD_PLUGINS": "ON",
         "FALCON_CORE_BUILD_C_API": "ON"
       }
     },

@@ -5,3 +5,5 @@ vcpkg/
 vcpkg_installed/
 compile_commands.json
 
+__pycache__/
+*.pyc

@@ -1,19 +1,30 @@
 cmake_minimum_required(VERSION 3.20)
 project(
   falcon-qarray-device
-  VERSION 1.0.1
-  LANGUAGES CXX)
+  VERSION 1.1.0
+  DESCRIPTION "A simulation wrapper and instrument plugin for QArray quantum dot simulations."
+  HOMEPAGE_URL "https://github.com/falcon-autotuning/falcon-qarray-device"
+  LANGUAGES C CXX
+)
 
+set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# ── Build Options ─────────────────────────────────────────────────────────────
-option(BUILD_TESTS  "Build tests"                          OFF)
-option(USE_CCACHE   "Enable ccache or sccache if available" ON)
-option(ENABLE_PCH   "Enable precompiled headers"           ON)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
+if(UNIX AND NOT APPLE)
+  add_link_options("-Wl,--disable-new-dtags")
+endif()
 
-# ── Compiler cache ──────────��─────────────────────────────────────────────────
+# ── Build Options ─────────────────────────────────────────────────────────────
+option(BUILD_TESTS   "Build tests"                          ON)
+option(BUILD_PLUGINS "Build instrument plugins"             ON)
+option(USE_CCACHE    "Enable ccache or sccache if available" ON)
+option(ENABLE_PCH    "Enable precompiled headers"           ON)
+
+# ── Compiler cache ───────────────────────────────────────────────────────────
 if(USE_CCACHE)
   find_program(SCCACHE_PROGRAM sccache)
   if(SCCACHE_PROGRAM)
@@ -33,25 +44,8 @@ if(USE_CCACHE)
 endif()
 
 # ── Find Python ───────────────────────────────────────────────────────────────
-# IMPORTANT: We must find the SAME Python that has qarray and numpy installed
-# (i.e., the uv-managed venv), NOT vcpkg's stripped-down Python headers.
-#
-# The caller (Makefile) is responsible for passing:
-#   -DPython3_EXECUTABLE=/path/to/uv/venv/bin/python
-#   -DPython3_ROOT_DIR=/path/to/uv/venv
-#
-# This is detected automatically by `make configure` using `uv run which python`.
-# You can also override it manually:
-#   make configure PYTHON_EXECUTABLE=/my/python
-#
-# pybind11::embed will link against the libpython of this exact interpreter,
-# so the embedded interpreter at runtime will find its full stdlib + site-packages.
-
-# Prevent cmake from finding vcpkg's Python or the system Python ahead of ours.
-# cmake's FindPython3 respects Python3_EXECUTABLE if set via -D on the command line.
 if(DEFINED Python3_EXECUTABLE)
   message(STATUS "Python3_EXECUTABLE explicitly set to: ${Python3_EXECUTABLE}")
-  # Force cmake to use only this interpreter — do not search elsewhere.
   set(Python3_FIND_STRATEGY LOCATION)
   set(Python3_FIND_REGISTRY NEVER)
   set(Python3_FIND_FRAMEWORK NEVER)
@@ -61,25 +55,10 @@ find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 message(STATUS "Python3 interpreter : ${Python3_EXECUTABLE}")
 message(STATUS "Python3 version     : ${Python3_VERSION}")
 message(STATUS "Python3 include dirs: ${Python3_INCLUDE_DIRS}")
-message(STATUS "Python3 libraries   : ${Python3_LIBRARIES}")
-message(STATUS "Python3 stdlib dir  : ${Python3_STDLIB}")
 
-# Sanity check: confirm the interpreter has the standard library.
-# If this fails, you are pointing at an incomplete Python (e.g. vcpkg's headers-only Python).
-if(Python3_STDLIB STREQUAL "")
-  message(WARNING
-    "Python3_STDLIB is empty — the found Python may not have a standard library. "
-    "Pass -DPython3_EXECUTABLE=<full-python> to cmake, or run `make configure` "
-    "which auto-detects the uv venv Python.")
-endif()
-
-# ── Find pybind11 (via vcpkg) ─────────────────────────────────────────────────
 find_package(pybind11 CONFIG REQUIRED)
 message(STATUS "Found pybind11: ${pybind11_VERSION}")
 
-# ── Store the venv site-packages path so Device.cpp can add it to sys.path ───
-# This embeds the path at compile time so the library knows where qarray lives.
-# Override at runtime with FALCON_QARRAY_PYTHON_PATH env var.
 execute_process(
   COMMAND "${Python3_EXECUTABLE}" -c
     "import sys; print([p for p in sys.path if 'site-packages' in p][0])"
@@ -93,21 +72,16 @@ if(NOT _site_result EQUAL 0 OR PYTHON_SITE_PACKAGES STREQUAL "")
 endif()
 message(STATUS "Python3 site-packages: ${PYTHON_SITE_PACKAGES}")
 
-# ── Install path for the device.py module ────────────────────────
-# GNUInstallDirs must be included BEFORE this: CMAKE_INSTALL_DATADIR is only
-# defined by that module, and using it beforehand silently yields an absolute
-# "/falcon-qarray-device" instead of "share/falcon-qarray-device".
 include(GNUInstallDirs)
 set(PYTHON_MODULE_INSTALL_DIR "${CMAKE_INSTALL_DATADIR}/falcon-qarray-device")
 
-# ── Generate headers ──────────────────────────────────────────────────────────
 configure_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/src/PythonModulePath.hpp.in"
   "${CMAKE_CURRENT_BINARY_DIR}/generated/PythonModulePath.hpp"
   @ONLY
 )
 
-# ── Core library ─────────────────────────────────────────────────────────────
+# ── Core library: falcon-qarray-device ────────────────────────────────────────
 add_library(falcon-qarray-device SHARED
   src/Device.cpp
 )
@@ -115,7 +89,7 @@ add_library(falcon-qarray-device SHARED
 target_include_directories(falcon-qarray-device
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}/generated
@@ -126,37 +100,138 @@ target_link_libraries(falcon-qarray-device
     pybind11::embed
 )
 
-target_compile_options(falcon-qarray-device PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(falcon-qarray-device PRIVATE -Wall -Wextra)
 
-if(ENABLE_PCH)
-  target_precompile_headers(falcon-qarray-device
-    PRIVATE
-      <string>
-      <vector>
-      <map>
-      <memory>
-      <pybind11/embed.h>
-      <pybind11/numpy.h>
-      <pybind11/stl.h>
+# ── Instrument Dependencies ──────────────────────────────────────────────────
+find_package(cJSON CONFIG REQUIRED)
+find_package(instrument-data CONFIG REQUIRED)
+find_package(instrument-plugin-api CONFIG REQUIRED)
+find_package(instrument-log CONFIG REQUIRED)
+
+# ── Instrument Plugin ─────────────────────────────────────────────────────────
+if(BUILD_PLUGINS)
+  add_library(qarray_plugin MODULE
+    plugin/plugin.cpp
+  )
+
+  target_include_directories(qarray_plugin PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_BINARY_DIR}/generated
+  )
+
+  target_link_libraries(qarray_plugin PRIVATE
+    falcon-qarray-device
+    instrument-plugin-api::plugin
+    instrument-data::instrument-data
+    instrument-log::instrument-log
+    cjson
+    pybind11::embed
+  )
+
+  set_target_properties(qarray_plugin PROPERTIES
+    PREFIX "lib"
+    OUTPUT_NAME "qarray_plugin"
+  )
+
+  install(TARGETS qarray_plugin
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/plugins
   )
 endif()
 
-# ── Tests ─────────────────────────────────────────────────────────────────────
+# ── Tests & Embed Bundle ─────────────────────────────────────────────────────
 if(BUILD_TESTS)
   enable_testing()
 
-  # ── Pass Python paths to the test executable via CTest environment ──────────
-  # During development (non-installed build), quantum_dot_device.py lives in src/.
-  # We bake this path into the CTest environment so `make test-debug` just works
-  # without needing to set any env vars manually.
+  find_package(GTest CONFIG REQUIRED)
+  find_package(isa-test-utils CONFIG REQUIRED)
+  find_package(cmocka CONFIG REQUIRED)
+
+  # C++ GTest unit tests
   set(FALCON_DEV_PYTHON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src")
   set(FALCON_DEV_SITE_PACKAGES "${PYTHON_SITE_PACKAGES}")
 
-  add_subdirectory(tests)
+  add_executable(falcon-qarray-device_tests
+    tests/test_device.cpp
+  )
+  target_include_directories(falcon-qarray-device_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
+  target_link_libraries(falcon-qarray-device_tests PRIVATE
+    falcon-qarray-device
+    GTest::gtest
+    pybind11::embed
+  )
+  include(GoogleTest)
+  gtest_discover_tests(falcon-qarray-device_tests
+    PROPERTIES
+      ENVIRONMENT
+        "FALCON_QARRAY_PYTHON_PATH=${FALCON_DEV_PYTHON_PATH};FALCON_QARRAY_VENV_SITE_PACKAGES=${FALCON_DEV_SITE_PACKAGES}"
+  )
+
+  # ISA Test Utils Bundle & cmocka integration test
+  if(BUILD_PLUGINS)
+    file(GLOB_RECURSE ISA_FILES    "${CMAKE_SOURCE_DIR}/isa/*")
+    file(GLOB_RECURSE CONFIG_FILES "${CMAKE_SOURCE_DIR}/tests/config/*")
+
+    set(GENERATED_INCLUDE_DIR
+      ${CMAKE_CURRENT_BINARY_DIR}/include/falcon-qarray-device)
+    file(MAKE_DIRECTORY ${GENERATED_INCLUDE_DIR})
+
+    set(EMBED_HEADER ${GENERATED_INCLUDE_DIR}/embedded_bundle.h)
+    isa_test_utils_embed_bundle(
+      OUTPUT ${EMBED_HEADER}
+      ISA_FILES ${ISA_FILES}
+      CONFIG_FILES ${CONFIG_FILES}
+    )
+    add_custom_target(embed_bundle ALL DEPENDS ${EMBED_HEADER})
+
+    add_executable(qarray-instrument-test
+      tests/test_plugin.c
+    )
+    add_dependencies(qarray-instrument-test embed_bundle qarray_plugin)
+
+    target_compile_definitions(qarray-instrument-test PRIVATE
+      BUILD_PLUGIN_PATH="$<TARGET_FILE:qarray_plugin>"
+      TEST_DEVICE_CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/config/test-qarray-device.yml"
+    )
+
+    target_include_directories(qarray-instrument-test PRIVATE
+      ${CMAKE_CURRENT_BINARY_DIR}/include
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+
+    target_link_libraries(qarray-instrument-test PRIVATE
+      instrument-plugin-api::host
+      instrument-plugin-api::plugin
+      instrument-data::instrument-data
+      isa-test-utils::isa-test-utils
+      cmocka::cmocka
+    )
+
+    add_test(NAME qarray-instrument-test COMMAND qarray-instrument-test)
+
+    set(PLUGIN_SEARCH_PATHS
+      "${CMAKE_BINARY_DIR}"
+      "${CMAKE_BINARY_DIR}/lib"
+    )
+    if(WIN32)
+      set(PATH_SEPARATOR ";")
+    else()
+      set(PATH_SEPARATOR ":")
+    endif()
+    string(REPLACE ";" "${PATH_SEPARATOR}"
+           PLUGIN_SEARCH_PATH_ENV "${PLUGIN_SEARCH_PATHS}")
+    set(VCPKG_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-linux-dynamic/lib")
+
+    set_tests_properties(qarray-instrument-test PROPERTIES
+      WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+      ENVIRONMENT "PATH=${PLUGIN_SEARCH_PATH_ENV}${PATH_SEPARATOR}$ENV{PATH};LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}${PATH_SEPARATOR}${VCPKG_LIB_DIR}${PATH_SEPARATOR}$ENV{LD_LIBRARY_PATH};FALCON_QARRAY_PYTHON_PATH=${FALCON_DEV_PYTHON_PATH};FALCON_QARRAY_VENV_SITE_PACKAGES=${FALCON_DEV_SITE_PACKAGES}"
+    )
+  endif()
 endif()
 
-# ── Install rules ─────────────────────────────────────────────────────────────
-include(GNUInstallDirs)
+# ── Installation rules ────────────────────────────────────────────────────────
 include(CMakePackageConfigHelpers)
 
 install(TARGETS falcon-qarray-device
@@ -174,13 +249,13 @@ install(DIRECTORY include/falcon-qarray-device
     PATTERN "*.h"
 )
 
-# Device.cpp resolves the Python module through FALCON_QARRAY_PYTHON_MODULE_DIR,
-# which PythonModulePath.hpp.in bakes to PYTHON_MODULE_INSTALL_DIR. Without this
-# rule that directory is never populated, so an installed build cannot import its
-# own module. Consumers still override with an absolute FALCON_QARRAY_PYTHON_PATH
-# at runtime, since the baked path is relative to the install prefix.
 install(FILES src/device.py
   DESTINATION ${PYTHON_MODULE_INSTALL_DIR}
+)
+
+install(DIRECTORY isa/
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/falcon-qarray-device/isa
+  FILES_MATCHING PATTERN "*.yml"
 )
 
 write_basic_package_version_file(
@@ -194,11 +269,13 @@ install(EXPORT falcon-qarray-device-targets
   NAMESPACE falcon::
   DESTINATION ${CMAKE_INSTALL_DATADIR}/falcon-qarray-device
 )
+
 configure_package_config_file(
   cmake/falcon-qarray-device-config.cmake.in
   "${CMAKE_CURRENT_BINARY_DIR}/falcon-qarray-device-config.cmake"
   INSTALL_DESTINATION ${CMAKE_INSTALL_DATADIR}/falcon-qarray-device
 )
+
 install(FILES
   "${CMAKE_CURRENT_BINARY_DIR}/falcon-qarray-device-config.cmake"
   "${CMAKE_CURRENT_BINARY_DIR}/falcon-qarray-device-config-version.cmake"

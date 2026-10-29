@@ -28,9 +28,12 @@ class Device:
             config_path: The path to the YAML configuration file.
         """
         if isinstance(config, str):
-            config_loc = Path(config)
-            with config_loc.open("r") as f:
-                config = yaml.safe_load(f)
+            if "\n" in config or ":" in config:
+                config = yaml.safe_load(config)
+            else:
+                config_loc = Path(config)
+                with config_loc.open("r") as f:
+                    config = yaml.safe_load(f)
         assert not isinstance(config, str), "The config did not get converted propertly"
         self.n_dots = int(config["n_dots"])
         self.gate_names = config["gate_names"]
