@@ -39,7 +39,7 @@ channel_groups:
       name: channel
       type: int
       min: 1
-      max: 1025
+      max: 256
       description: Gate voltage channel index
     io_types:
       - suffix: voltage
