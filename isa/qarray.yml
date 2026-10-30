@@ -210,94 +210,6 @@ io:
     role: input
     description: Measured DC voltage on gate
     unit: V
-  - name: sensor1_signal
-    type: float
-    role: input
-    description: Scalar charge sensor readout
-    unit: V
-  - name: sensor1_stream
-    type: buffer
-    role: input
-    description: Streamed sensor buffer
-    unit: V
-    element_type: float
-  - name: sensor2_signal
-    type: float
-    role: input
-    description: Scalar charge sensor readout
-    unit: V
-  - name: sensor2_stream
-    type: buffer
-    role: input
-    description: Streamed sensor buffer
-    unit: V
-    element_type: float
-  - name: sensor3_signal
-    type: float
-    role: input
-    description: Scalar charge sensor readout
-    unit: V
-  - name: sensor3_stream
-    type: buffer
-    role: input
-    description: Streamed sensor buffer
-    unit: V
-    element_type: float
-  - name: sensor4_signal
-    type: float
-    role: input
-    description: Scalar charge sensor readout
-    unit: V
-  - name: sensor4_stream
-    type: buffer
-    role: input
-    description: Streamed sensor buffer
-    unit: V
-    element_type: float
-  - name: sensor5_signal
-    type: float
-    role: input
-    description: Scalar charge sensor readout
-    unit: V
-  - name: sensor5_stream
-    type: buffer
-    role: input
-    description: Streamed sensor buffer
-    unit: V
-    element_type: float
-  - name: sensor6_signal
-    type: float
-    role: input
-    description: Scalar charge sensor readout
-    unit: V
-  - name: sensor6_stream
-    type: buffer
-    role: input
-    description: Streamed sensor buffer
-    unit: V
-    element_type: float
-  - name: sensor7_signal
-    type: float
-    role: input
-    description: Scalar charge sensor readout
-    unit: V
-  - name: sensor7_stream
-    type: buffer
-    role: input
-    description: Streamed sensor buffer
-    unit: V
-    element_type: float
-  - name: sensor8_signal
-    type: float
-    role: input
-    description: Scalar charge sensor readout
-    unit: V
-  - name: sensor8_stream
-    type: buffer
-    role: input
-    description: Streamed sensor buffer
-    unit: V
-    element_type: float
 channel_groups:
   - name: source
     description: Simulated DC gate voltage sources
@@ -305,39 +217,14 @@ channel_groups:
       name: channel
       type: int
       min: 1
-      max: 16
+      max: 1025
       description: Gate voltage channel index
     io_types:
       - suffix: voltage
         type: float
-        role: output
+        role: inout
         unit: V
         description: Voltage to set on gate
-      - suffix: measured_voltage
-        type: float
-        role: input
-        unit: V
-        description: Measured DC voltage on gate
-  - name: sensor
-    description: Virtual charge sensor readout
-    channel_parameter:
-      name: channel
-      type: int
-      min: 1
-      max: 8
-      description: Sensor channel index
-    io_types:
-      - suffix: signal
-        type: float
-        role: input
-        unit: V
-        description: Scalar charge sensor readout
-      - suffix: stream
-        type: buffer
-        role: input
-        unit: V
-        element_type: float
-        description: Streamed sensor buffer
 commands:
   SET_VOLTAGE:
     description: Set DC voltage for gate channel
@@ -350,32 +237,24 @@ commands:
     channel_group: source
     parameters: []
     outputs:
-      - measured_voltage
-  GET_SENSOR_SIGNAL:
-    description: Read instantaneous sensor signal
-    channel_group: sensor
-    parameters: []
-    outputs:
-      - signal
-  SCAN_2D:
-    description: Perform 2D scan and return differentiated sensor trace stream
-    parameters:
-      - io: x_gate
-      - io: y_gate
-      - io: x_min
-      - io: x_max
-      - io: y_min
-      - io: y_max
-      - io: resolution
-    outputs:
-      - output_stream
-  SCAN_1D:
-    description: Perform 1D scan on a gate and return sensor trace stream
+      - voltage
+  CONFIGURE_SCAN:
+    description: configures a 1D scan on a gate. Maintains a history of 2
     channel_group: source
     parameters:
-      - io: x_min
-      - io: x_max
+      - io: min
+      - io: max
       - io: resolution
+    outputs: []
+  DIFFERENTIAL_SCAN:
+    description: Returns the differentiated signal
+    parameters: []
+    outputs:
+      - output_stream
+  SCAN:
+    description: Returns the sensor trace stream
+    channel_group: source
+    parameters: []
     outputs:
       - output_stream
   RESET:

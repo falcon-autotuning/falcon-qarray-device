@@ -1,0 +1,85 @@
+api_version: 1.0.0
+instrument:
+  vendor: Falcon
+  model: QArraySimulator
+  identifier: QARRAY
+  description: Simulated Quantum Dot Device using QArray
+protocol:
+  type: Custom
+  name: QArray
+io:
+  - name: config_path
+    type: string
+    role: setting
+    description: Path to device YAML configuration file
+  - name: min
+    type: float
+    role: setting
+    unit: V
+    description: X axis start voltage
+  - name: max
+    type: float
+    role: setting
+    unit: V
+    description: X axis end voltage
+  - name: resolution
+    type: int
+    role: setting
+    description: Scan resolution points per axis
+  - name: output_stream
+    type: buffer
+    role: input
+    unit: V
+    element_type: float
+    description: Measurement trace or 2D raster output stream
+channel_groups:
+  - name: source
+    description: Simulated DC gate voltage sources
+    channel_parameter:
+      name: channel
+      type: int
+      min: 1
+      max: 1025
+      description: Gate voltage channel index
+    io_types:
+      - suffix: voltage
+        type: float
+        role: inout
+        unit: V
+        description: Voltage to set on gate
+commands:
+  SET_VOLTAGE:
+    description: Set DC voltage for gate channel
+    channel_group: source
+    parameters:
+      - io: voltage
+    outputs: []
+  GET_VOLTAGE:
+    description: Read DC voltage for gate channel
+    channel_group: source
+    parameters: []
+    outputs:
+      - voltage
+  CONFIGURE_SCAN:
+    description: configures a 1D scan on a gate. Maintains a history of 2
+    channel_group: source
+    parameters:
+      - io: min
+      - io: max
+      - io: resolution
+    outputs: []
+  DIFFERENTIAL_SCAN:
+    description: Returns the differentiated signal
+    parameters: []
+    outputs:
+      - output_stream
+  SCAN:
+    description: Returns the sensor trace stream
+    channel_group: source
+    parameters: []
+    outputs:
+      - output_stream
+  RESET:
+    description: Reset device state
+    parameters: []
+    outputs: []
