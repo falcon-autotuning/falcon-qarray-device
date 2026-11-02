@@ -26,6 +26,10 @@ io:
     type: int
     role: setting
     description: Scan resolution points per axis
+  - name: axis
+    type: int
+    role: setting
+    description: Scan axis dimension, either 0 or 1 where 0 is for a 1D sweep and 1 is the second dimension
   - name: output_stream
     type: buffer
     role: input
@@ -67,6 +71,7 @@ commands:
       - io: min
       - io: max
       - io: resolution
+      - io: axis
     outputs: []
   DIFFERENTIAL_SCAN:
     description: Returns the differentiated signal
