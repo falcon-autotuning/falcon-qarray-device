@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <dlfcn.h>
 #include <filesystem>
 #include <memory>
@@ -27,6 +28,15 @@ static const char PLUGIN_NAME[] = "QArraySimulator";
 
 namespace {
 
+struct GateScanConfig {
+  std::string gate_name;
+  size_t channel = 0;
+  double min_v = 0.0;
+  double max_v = 0.0;
+  int resolution = 0;
+  int axis = 0;
+};
+
 struct PluginState {
   std::mutex mutex;
   bool initialized = false;
@@ -35,6 +45,7 @@ struct PluginState {
   std::string config_path;
   std::vector<std::string> gate_names;
   char instrument_name[PLUGIN_MAX_STRING_LEN] = {0};
+  std::deque<GateScanConfig> scan_history; // Maintains history of up to 2
 };
 
 static PluginState g_plugin_state;
@@ -88,9 +99,12 @@ INSTRUMENT_PLUGIN_API uint8_t plugin_initialize(const PluginConfig *config) {
   }
 
   try {
-    // Dynamically load libpython symbols globally so Python C-extensions (like math.so)
-    // can resolve PyFloat_Type etc. when instrument-worker dynamically loads this plugin.
-    dlopen("libpython3.12.so.1.0", RTLD_NOW | RTLD_GLOBAL);
+    // Dynamically promote the libpython symbols already linked into this process to RTLD_GLOBAL,
+    // so Python C-extensions (like math.so) can resolve PyFloat_Type etc. without crashing.
+    Dl_info dlinfo;
+    if (dladdr(reinterpret_cast<void *>(&Py_Initialize), &dlinfo) && dlinfo.dli_fname) {
+      dlopen(dlinfo.dli_fname, RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD);
+    }
 
     if (Py_IsInitialized() == 0) {
       g_plugin_state.interp = std::make_unique<py::scoped_interpreter>();
@@ -100,6 +114,7 @@ INSTRUMENT_PLUGIN_API uint8_t plugin_initialize(const PluginConfig *config) {
     QARRAY_LOG_INFO("Initializing QArray device with config '%s'...", cfg_path.c_str());
     g_plugin_state.device = std::make_unique<falcon::qarray::Device>(cfg_path);
     g_plugin_state.gate_names = g_plugin_state.device->gate_names();
+    g_plugin_state.scan_history.clear();
     g_plugin_state.initialized = true;
 
     QARRAY_LOG_INFO("QArray plugin initialized with config '%s', %zu gates found",
@@ -115,6 +130,86 @@ INSTRUMENT_PLUGIN_API uint8_t plugin_initialize(const PluginConfig *config) {
     QARRAY_LOG_ERROR("Unknown exception during QArray device init");
     return 1;
   }
+}
+
+static uint8_t execute_scan_internal(bool differential, PluginResponse *resp) {
+  if (g_plugin_state.scan_history.empty()) {
+    QARRAY_LOG_ERROR("Scan requested but no scan configuration set");
+    return 1;
+  }
+
+  std::vector<double> stream_data;
+  const char *scan_verb = differential ? "DIFFERENTIAL_SCAN" : "SCAN";
+
+  if (g_plugin_state.scan_history.size() == 1) {
+    // 1D scan on a single gate
+    const auto &cfg = g_plugin_state.scan_history.back();
+    auto result = g_plugin_state.device->scan_1d(cfg.gate_name, {cfg.min_v, cfg.max_v}, cfg.resolution);
+    if (differential && result.has_sensor && !result.differentiated_signal.empty()) {
+      stream_data = std::move(result.differentiated_signal);
+    } else if (result.has_sensor && !result.sensor_output.empty()) {
+      stream_data = std::move(result.sensor_output);
+    } else {
+      stream_data.assign(cfg.resolution, 0.0);
+    }
+  } else {
+    // We have 2 configurations in history
+    const auto &cfg1 = g_plugin_state.scan_history[0];
+    const auto &cfg2 = g_plugin_state.scan_history[1];
+
+    if (cfg1.axis != cfg2.axis) {
+      // 2D Scan across 2 orthogonal axes (e.g. axis 0 and axis 1)
+      const auto &x_cfg = (cfg1.axis == 0) ? cfg1 : cfg2;
+      const auto &y_cfg = (cfg1.axis == 1) ? cfg1 : cfg2;
+      int res = x_cfg.resolution; // Assuming resolution from x or max
+      auto result = g_plugin_state.device->scan_2d(
+          x_cfg.gate_name, y_cfg.gate_name,
+          {x_cfg.min_v, x_cfg.max_v},
+          {y_cfg.min_v, y_cfg.max_v},
+          res);
+
+      if (differential && result.has_sensor && !result.differentiated_signal.empty()) {
+        stream_data = std::move(result.differentiated_signal);
+      } else if (result.has_sensor && !result.sensor_output.empty()) {
+        stream_data = std::move(result.sensor_output);
+      } else {
+        stream_data.assign(res * res, 0.0);
+      }
+    } else {
+      // Ray Scan: both gates vary simultaneously along the same axis (e.g. axis 0)
+      std::map<std::string, double> start_map;
+      std::map<std::string, double> end_map;
+      start_map[cfg1.gate_name] = cfg1.min_v;
+      end_map[cfg1.gate_name] = cfg1.max_v;
+      start_map[cfg2.gate_name] = cfg2.min_v;
+      end_map[cfg2.gate_name] = cfg2.max_v;
+
+      int res = cfg2.resolution > 0 ? cfg2.resolution : cfg1.resolution;
+      auto result = g_plugin_state.device->scan_ray(start_map, end_map, res);
+
+      if (differential && result.has_sensor && !result.differentiated_signal.empty()) {
+        stream_data = std::move(result.differentiated_signal);
+      } else if (result.has_sensor && !result.sensor_output.empty()) {
+        stream_data = std::move(result.sensor_output);
+      } else {
+        stream_data.assign(res, 0.0);
+      }
+    }
+  }
+
+  const char *buf_id = data_manager_create_buffer(
+      "qarray", scan_verb, INST_DATA_FLOAT64, stream_data.size(), stream_data.data());
+  if (!buf_id) {
+    QARRAY_LOG_ERROR("Failed to create data buffer for %s", scan_verb);
+    return 1;
+  }
+
+  Variable out = {};
+  out.type = PARAM_TYPE_BUFFER;
+  std::strncpy(out.name, "output_stream", PLUGIN_MAX_STRING_LEN - 1);
+  std::strncpy(out.value.str_val, buf_id, PLUGIN_MAX_STRING_LEN - 1);
+  plugin_response_push(resp, &out);
+  return 0;
 }
 
 INSTRUMENT_PLUGIN_API uint8_t plugin_execute_command(const PluginCommand *cmd,
@@ -181,124 +276,58 @@ INSTRUMENT_PLUGIN_API uint8_t plugin_execute_command(const PluginCommand *cmd,
 
     Variable out = {};
     out.type = PARAM_TYPE_DOUBLE;
-    std::strncpy(out.name, "measured_voltage", PLUGIN_MAX_STRING_LEN - 1);
+    std::strncpy(out.name, "voltage", PLUGIN_MAX_STRING_LEN - 1);
     out.value.d_val = volt;
     plugin_response_push(resp, &out);
     return 0;
   }
 
-  if (std::strcmp(cmd->command, "GET_SENSOR_SIGNAL") == 0) {
-    const Variable *v_channel = get_param("sensor");
+  if (std::strcmp(cmd->command, "CONFIGURE_SCAN") == 0) {
+    const Variable *v_channel = get_param("source");
     if (!v_channel) {
       v_channel = get_param("channel");
     }
-    // Read instantaneous sensor signal for current gate voltages
-    auto gate_names = g_plugin_state.gate_names;
-    std::string probe_gate = gate_names.empty() ? "P1" : gate_names[0];
-    auto current_volts = g_plugin_state.device->voltages();
-    double current_v = current_volts.count(probe_gate) ? current_volts.at(probe_gate) : 0.0;
-
-    // 1D single point / tiny window around current voltage
-    auto res = g_plugin_state.device->scan_1d(probe_gate, {current_v - 0.001, current_v + 0.001}, 2);
-    double signal = 0.0;
-    if (res.has_sensor && !res.sensor_output.empty()) {
-      signal = res.sensor_output[0];
-    }
-
-    Variable out = {};
-    out.type = PARAM_TYPE_DOUBLE;
-    std::strncpy(out.name, "signal", PLUGIN_MAX_STRING_LEN - 1);
-    out.value.d_val = signal;
-    plugin_response_push(resp, &out);
-    return 0;
-  }
-
-  if (std::strcmp(cmd->command, "SCAN_1D") == 0) {
-    const Variable *v_channel = get_param("channel");
-    const Variable *v_min = get_param("x_min");
-    const Variable *v_max = get_param("x_max");
+    const Variable *v_min = get_param("min");
+    const Variable *v_max = get_param("max");
     const Variable *v_res = get_param("resolution");
+    const Variable *v_axis = get_param("axis");
 
     if (!v_channel || !v_min || !v_max || !v_res) {
-      QARRAY_LOG_ERROR("SCAN_1D missing required parameters");
+      QARRAY_LOG_ERROR("CONFIGURE_SCAN missing required parameters");
       return 1;
     }
 
-    std::string gate = get_gate_name_for_channel(static_cast<size_t>(v_channel->value.i64_val));
-    double min_v = v_min->value.d_val;
-    double max_v = v_max->value.d_val;
-    int resolution = static_cast<int>(v_res->value.i64_val);
-
-    auto result = g_plugin_state.device->scan_1d(gate, {min_v, max_v}, resolution);
-    std::vector<double> stream_data;
-    if (result.has_sensor && !result.differentiated_signal.empty()) {
-      stream_data = result.differentiated_signal;
-    } else if (result.has_sensor && !result.sensor_output.empty()) {
-      stream_data = result.sensor_output;
-    } else {
-      stream_data.assign(resolution, 0.0);
-    }
-
-    const char *buf_id = data_manager_create_buffer(
-        "qarray", "SCAN_1D", INST_DATA_FLOAT64, stream_data.size(), stream_data.data());
-    if (!buf_id) {
-      QARRAY_LOG_ERROR("Failed to create data buffer for 1D scan");
+    int64_t ch = v_channel->value.i64_val;
+    std::string gate = get_gate_name_for_channel(static_cast<size_t>(ch));
+    if (gate.empty()) {
+      QARRAY_LOG_ERROR("Channel %ld out of bounds for gate list", ch);
       return 1;
     }
 
-    Variable out = {};
-    out.type = PARAM_TYPE_BUFFER;
-    std::strncpy(out.name, "output_stream", PLUGIN_MAX_STRING_LEN - 1);
-    std::strncpy(out.value.str_val, buf_id, PLUGIN_MAX_STRING_LEN - 1);
-    plugin_response_push(resp, &out);
+    GateScanConfig cfg;
+    cfg.gate_name = gate;
+    cfg.channel = static_cast<size_t>(ch);
+    cfg.min_v = v_min->value.d_val;
+    cfg.max_v = v_max->value.d_val;
+    cfg.resolution = static_cast<int>(v_res->value.i64_val);
+    cfg.axis = v_axis ? static_cast<int>(v_axis->value.i64_val) : 0;
+
+    if (g_plugin_state.scan_history.size() >= 2) {
+      g_plugin_state.scan_history.pop_front();
+    }
+    g_plugin_state.scan_history.push_back(cfg);
+    QARRAY_LOG_INFO("CONFIGURE_SCAN for %s (ch %ld): [%f, %f], res=%d, axis=%d (history size=%zu)",
+                    gate.c_str(), ch, cfg.min_v, cfg.max_v, cfg.resolution, cfg.axis,
+                    g_plugin_state.scan_history.size());
     return 0;
   }
 
-  if (std::strcmp(cmd->command, "SCAN_2D") == 0) {
-    const Variable *v_xgate = get_param("x_gate");
-    const Variable *v_ygate = get_param("y_gate");
-    const Variable *v_xmin = get_param("x_min");
-    const Variable *v_xmax = get_param("x_max");
-    const Variable *v_ymin = get_param("y_min");
-    const Variable *v_ymax = get_param("y_max");
-    const Variable *v_res = get_param("resolution");
+  if (std::strcmp(cmd->command, "DIFFERENTIAL_SCAN") == 0) {
+    return execute_scan_internal(/*differential=*/true, resp);
+  }
 
-    if (!v_xgate || !v_ygate || !v_xmin || !v_xmax || !v_ymin || !v_ymax || !v_res) {
-      QARRAY_LOG_ERROR("SCAN_2D missing required parameters");
-      return 1;
-    }
-
-    std::string x_gate = v_xgate->value.str_val;
-    std::string y_gate = v_ygate->value.str_val;
-    double x_min = v_xmin->value.d_val;
-    double x_max = v_xmax->value.d_val;
-    double y_min = v_ymin->value.d_val;
-    double y_max = v_ymax->value.d_val;
-    int resolution = static_cast<int>(v_res->value.i64_val);
-
-    auto result = g_plugin_state.device->scan_2d(x_gate, y_gate, {x_min, x_max}, {y_min, y_max}, resolution);
-    std::vector<double> stream_data;
-    if (result.has_sensor && !result.differentiated_signal.empty()) {
-      stream_data = result.differentiated_signal;
-    } else if (result.has_sensor && !result.sensor_output.empty()) {
-      stream_data = result.sensor_output;
-    } else {
-      stream_data.assign(resolution * resolution, 0.0);
-    }
-
-    const char *buf_id = data_manager_create_buffer(
-        "qarray", "SCAN_2D", INST_DATA_FLOAT64, stream_data.size(), stream_data.data());
-    if (!buf_id) {
-      QARRAY_LOG_ERROR("Failed to create data buffer for 2D scan");
-      return 1;
-    }
-
-    Variable out = {};
-    out.type = PARAM_TYPE_BUFFER;
-    std::strncpy(out.name, "output_stream", PLUGIN_MAX_STRING_LEN - 1);
-    std::strncpy(out.value.str_val, buf_id, PLUGIN_MAX_STRING_LEN - 1);
-    plugin_response_push(resp, &out);
-    return 0;
+  if (std::strcmp(cmd->command, "SCAN") == 0) {
+    return execute_scan_internal(/*differential=*/false, resp);
   }
 
   if (std::strcmp(cmd->command, "RESET") == 0) {
@@ -307,15 +336,17 @@ INSTRUMENT_PLUGIN_API uint8_t plugin_execute_command(const PluginCommand *cmd,
         g_plugin_state.device->set_voltage(gate, 0.0);
       }
     }
+    g_plugin_state.scan_history.clear();
     return 0;
   }
 
-  QARRAY_LOG_WARN("Unknown command: {}", cmd->command);
+  QARRAY_LOG_WARN("Unknown command: %s", cmd->command);
   return 1;
 }
 
 INSTRUMENT_PLUGIN_API void plugin_shutdown(void) {
   std::lock_guard<std::mutex> lock(g_plugin_state.mutex);
+  g_plugin_state.scan_history.clear();
   g_plugin_state.device.reset();
   g_plugin_state.interp.reset();
   g_plugin_state.initialized = false;

@@ -110,19 +110,26 @@ static void test_set_and_get_voltage(void **state) {
   map_free(map);
 }
 
-static void test_get_sensor_signal(void **state) {
+static void test_scan_1d(void **state) {
   (void)state;
   const char *script =
       "function main(ctx)\n"
-      "  ctx:log(\"Reading sensor signal\")\n"
-      "  local c1 = instrument_call_stack.new({\n"
+      "  ctx:log(\"Configuring and performing 1D scan on channel 1\")\n"
+      "  local cfg = instrument_call_stack.new({\n"
       "    instrument = \"QARRAY\",\n"
-      "    command = \"GET_SENSOR_SIGNAL\",\n"
-      "    channel_group = \"sensor\",\n"
+      "    command = \"CONFIGURE_SCAN\",\n"
+      "    channel_group = \"source\",\n"
       "    channel = 1,\n"
       "  })\n"
-      "  local res = ctx:call(c1)\n"
-      "  ctx:log(string.format(\"Sensor signal: %f\", res[1]:value()))\n"
+      "  ctx:call(cfg, -0.5, 0.5, 51, 0)\n"
+      "  local scan = instrument_call_stack.new({\n"
+      "    instrument = \"QARRAY\",\n"
+      "    command = \"SCAN\",\n"
+      "    channel_group = \"source\",\n"
+      "    channel = 1,\n"
+      "  })\n"
+      "  local res = ctx:call(scan)\n"
+      "  ctx:log(\"SCAN finished\")\n"
       "end\n";
 
   Map *map = map_new();
@@ -130,6 +137,119 @@ static void test_get_sensor_signal(void **state) {
 
   assert_non_null(output);
   assert_string_equal(output->status, "success");
+  assert_true(output->step_count >= 2);
+
+  bool found_scan = false;
+  for (int i = 0; i < output->step_count; i++) {
+    if (strcmp(output->steps[i].verb, "SCAN") == 0) {
+      found_scan = true;
+      assert_int_equal(output->steps[i].return_count, 1);
+      assert_int_equal(output->steps[i].returns[0].type, VAL_TYPE_BUFFER);
+      assert_int_equal(output->steps[i].returns[0].value.buf_val.element_count, 51);
+      break;
+    }
+  }
+  assert_true(found_scan);
+
+  free_result(output);
+  map_free(map);
+}
+
+static void test_differential_scan_ray(void **state) {
+  (void)state;
+  const char *script =
+      "function main(ctx)\n"
+      "  ctx:log(\"Configuring 2-gate ray scan on channels 1 and 2\")\n"
+      "  local cfg1 = instrument_call_stack.new({\n"
+      "    instrument = \"QARRAY\",\n"
+      "    command = \"CONFIGURE_SCAN\",\n"
+      "    channel_group = \"source\",\n"
+      "    channel = 1,\n"
+      "  })\n"
+      "  ctx:call(cfg1, -0.2, 0.2, 51, 0)\n"
+      "  local cfg2 = instrument_call_stack.new({\n"
+      "    instrument = \"QARRAY\",\n"
+      "    command = \"CONFIGURE_SCAN\",\n"
+      "    channel_group = \"source\",\n"
+      "    channel = 2,\n"
+      "  })\n"
+      "  ctx:call(cfg2, -0.1, 0.1, 51, 0)\n"
+      "  local diff_scan = instrument_call_stack.new({\n"
+      "    instrument = \"QARRAY\",\n"
+      "    command = \"DIFFERENTIAL_SCAN\",\n"
+      "  })\n"
+      "  local res = ctx:call(diff_scan)\n"
+      "  ctx:log(\"DIFFERENTIAL_SCAN ray finished\")\n"
+      "end\n";
+
+  Map *map = map_new();
+  const Result *output = perform_measurement(script, map);
+
+  assert_non_null(output);
+  assert_string_equal(output->status, "success");
+  assert_true(output->step_count >= 3);
+
+  bool found_scan = false;
+  for (int i = 0; i < output->step_count; i++) {
+    if (strcmp(output->steps[i].verb, "DIFFERENTIAL_SCAN") == 0) {
+      found_scan = true;
+      assert_int_equal(output->steps[i].return_count, 1);
+      assert_int_equal(output->steps[i].returns[0].type, VAL_TYPE_BUFFER);
+      assert_int_equal(output->steps[i].returns[0].value.buf_val.element_count, 51);
+      break;
+    }
+  }
+  assert_true(found_scan);
+
+  free_result(output);
+  map_free(map);
+}
+
+static void test_scan_2d(void **state) {
+  (void)state;
+  const char *script =
+      "function main(ctx)\n"
+      "  ctx:log(\"Configuring 2D scan across channels 1 (axis 0) and 2 (axis 1)\")\n"
+      "  local cfg1 = instrument_call_stack.new({\n"
+      "    instrument = \"QARRAY\",\n"
+      "    command = \"CONFIGURE_SCAN\",\n"
+      "    channel_group = \"source\",\n"
+      "    channel = 1,\n"
+      "  })\n"
+      "  ctx:call(cfg1, -0.3, 0.3, 20, 0)\n"
+      "  local cfg2 = instrument_call_stack.new({\n"
+      "    instrument = \"QARRAY\",\n"
+      "    command = \"CONFIGURE_SCAN\",\n"
+      "    channel_group = \"source\",\n"
+      "    channel = 2,\n"
+      "  })\n"
+      "  ctx:call(cfg2, -0.3, 0.3, 20, 1)\n"
+      "  local diff_scan = instrument_call_stack.new({\n"
+      "    instrument = \"QARRAY\",\n"
+      "    command = \"DIFFERENTIAL_SCAN\",\n"
+      "  })\n"
+      "  local res = ctx:call(diff_scan)\n"
+      "  ctx:log(\"DIFFERENTIAL_SCAN 2D finished\")\n"
+      "end\n";
+
+  Map *map = map_new();
+  const Result *output = perform_measurement(script, map);
+
+  assert_non_null(output);
+  assert_string_equal(output->status, "success");
+  assert_true(output->step_count >= 3);
+
+  bool found_scan = false;
+  for (int i = 0; i < output->step_count; i++) {
+    if (strcmp(output->steps[i].verb, "DIFFERENTIAL_SCAN") == 0) {
+      found_scan = true;
+      assert_int_equal(output->steps[i].return_count, 1);
+      assert_int_equal(output->steps[i].returns[0].type, VAL_TYPE_BUFFER);
+      assert_int_equal(output->steps[i].returns[0].value.buf_val.element_count, 400);
+      break;
+    }
+  }
+  assert_true(found_scan);
 
   free_result(output);
   map_free(map);
@@ -144,7 +264,11 @@ int main(int argc, char **argv) {
                                       test_teardown_server_fixture),
       cmocka_unit_test_setup_teardown(test_set_and_get_voltage, test_setup_server_fixture,
                                       test_teardown_server_fixture),
-      cmocka_unit_test_setup_teardown(test_get_sensor_signal, test_setup_server_fixture,
+      cmocka_unit_test_setup_teardown(test_scan_1d, test_setup_server_fixture,
+                                      test_teardown_server_fixture),
+      cmocka_unit_test_setup_teardown(test_differential_scan_ray, test_setup_server_fixture,
+                                      test_teardown_server_fixture),
+      cmocka_unit_test_setup_teardown(test_scan_2d, test_setup_server_fixture,
                                       test_teardown_server_fixture),
   };
 

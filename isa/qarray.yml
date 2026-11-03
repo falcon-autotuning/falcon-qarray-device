@@ -12,204 +12,30 @@ io:
     type: string
     role: setting
     description: Path to device YAML configuration file
-  - name: x_gate
-    type: string
-    role: setting
-    description: X axis gate name for 2D scan
-  - name: y_gate
-    type: string
-    role: setting
-    description: Y axis gate name for 2D scan
-  - name: x_min
+  - name: min
     type: float
     role: setting
     unit: V
     description: X axis start voltage
-  - name: x_max
+  - name: max
     type: float
     role: setting
     unit: V
     description: X axis end voltage
-  - name: y_min
-    type: float
-    role: setting
-    unit: V
-    description: Y axis start voltage
-  - name: y_max
-    type: float
-    role: setting
-    unit: V
-    description: Y axis end voltage
   - name: resolution
     type: int
     role: setting
     description: Scan resolution points per axis
+  - name: axis
+    type: int
+    role: setting
+    description: Scan axis dimension, either 0 or 1 where 0 is for a 1D sweep and 1 is the second dimension
   - name: output_stream
     type: buffer
     role: input
     unit: V
     element_type: float
     description: Measurement trace or 2D raster output stream
-  - name: source1_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source1_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source2_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source2_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source3_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source3_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source4_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source4_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source5_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source5_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source6_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source6_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source7_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source7_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source8_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source8_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source9_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source9_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source10_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source10_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source11_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source11_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source12_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source12_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source13_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source13_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source14_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source14_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source15_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source15_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
-  - name: source16_voltage
-    type: float
-    role: output
-    description: Voltage to set on gate
-    unit: V
-  - name: source16_measured_voltage
-    type: float
-    role: input
-    description: Measured DC voltage on gate
-    unit: V
 channel_groups:
   - name: source
     description: Simulated DC gate voltage sources
@@ -217,7 +43,7 @@ channel_groups:
       name: channel
       type: int
       min: 1
-      max: 1025
+      max: 256
       description: Gate voltage channel index
     io_types:
       - suffix: voltage
@@ -245,6 +71,7 @@ commands:
       - io: min
       - io: max
       - io: resolution
+      - io: axis
     outputs: []
   DIFFERENTIAL_SCAN:
     description: Returns the differentiated signal

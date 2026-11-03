@@ -4,46 +4,6 @@ connection:
   address: custom
   custom: __DEVICE_CONFIG_PATH__
 io_config:
-  source1_voltage:
-    transformed-unit: V
-    offset: 0
-    scale: 1
-  source1_measured_voltage:
-    transformed-unit: V
-    offset: 0
-    scale: 1
-  source2_voltage:
-    transformed-unit: V
-    offset: 0
-    scale: 1
-  source2_measured_voltage:
-    transformed-unit: V
-    offset: 0
-    scale: 1
-  source3_voltage:
-    transformed-unit: V
-    offset: 0
-    scale: 1
-  source3_measured_voltage:
-    transformed-unit: V
-    offset: 0
-    scale: 1
-  source4_voltage:
-    transformed-unit: V
-    offset: 0
-    scale: 1
-  source4_measured_voltage:
-    transformed-unit: V
-    offset: 0
-    scale: 1
-  sensor1_signal:
-    transformed-unit: V
-    offset: 0
-    scale: 1
-  sensor1_stream:
-    transformed-unit: V
-    offset: 0
-    scale: 1
   output_stream:
     transformed-unit: V
     offset: 0
