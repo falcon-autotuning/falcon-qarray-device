@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(
   falcon-qarray-device
-  VERSION 1.1.0
+  VERSION 1.1.1
   DESCRIPTION "A simulation wrapper and instrument plugin for QArray quantum dot simulations."
   HOMEPAGE_URL "https://github.com/falcon-autotuning/falcon-qarray-device"
   LANGUAGES C CXX
